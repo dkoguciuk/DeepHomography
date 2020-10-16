@@ -345,12 +345,17 @@ class ResNet(nn.Module):
         patch_2 = self.auxiliary_resnet(input_tesnors[:, 1:, ...])
         pred_I2_CnnFeature = self.auxiliary_resnet(pred_I2)
 
+        # Downsample mask
+        downsample_factor = 4
+        downsample_layer = torch.nn.AvgPool2d(kernel_size=downsample_factor, stride=downsample_factor, padding=1)
+        mask_ap = downsample_layer(mask_ap)
+        sum_value = torch.sum(mask_ap)
+
         #######################################################################
         # Overwrite patch features - END
         #######################################################################
 
         feature_loss_mat = triplet_loss(patch_2, pred_I2_CnnFeature, patch_1)
-
         feature_loss = torch.sum(torch.mul(feature_loss_mat, mask_ap)) / sum_value
         feature_loss = torch.unsqueeze(feature_loss, 0)
 
