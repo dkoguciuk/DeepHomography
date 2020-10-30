@@ -351,13 +351,32 @@ class ResNet(nn.Module):
         mask_ap = downsample_layer(mask_ap)
         sum_value = torch.sum(mask_ap)
 
+        # Cosine distance
+        l1 = 1 - torch.cosine_similarity(pred_I2_CnnFeature, patch_2, dim=1)
+        l3 = 1 - torch.cosine_similarity(patch_1, patch_2, dim=1)
+
+        # Prepare mask
+        mask_ap = torch.squeeze(mask_ap, dim=1)
+        triplet_margin = 100.
+        feature_loss_mat = torch.max(l1-l3 + torch.ones_like(l1) * triplet_margin, torch.zeros_like(l1))
+
+        # Triplet loss
+        feature_loss_mat = triplet_loss(patch_2, pred_I2_CnnFeature, patch_1)        
+
+        # Triplet loss Normalized by mask
+        loss_den = torch.sum(torch.sum(mask_ap, dim=-1), dim=-1)
+        feature_loss = torch.sum(torch.sum(mask_ap * feature_loss_mat, dim=-1), dim=-1) /\
+                       torch.max(loss_den, torch.ones_like(loss_den))
+        feature_loss = torch.unsqueeze(torch.sum(feature_loss), dim=0)
+
+        # Old implementation
+#         feature_loss_mat = triplet_loss(patch_2, pred_I2_CnnFeature, patch_1)
+#         feature_loss = torch.sum(torch.mul(feature_loss_mat, mask_ap)) / sum_value
+#         feature_loss = torch.unsqueeze(feature_loss, 0)
+
         #######################################################################
         # Overwrite patch features - END
         #######################################################################
-
-        feature_loss_mat = triplet_loss(patch_2, pred_I2_CnnFeature, patch_1)
-        feature_loss = torch.sum(torch.mul(feature_loss_mat, mask_ap)) / sum_value
-        feature_loss = torch.unsqueeze(feature_loss, 0)
 
         pred_I2_d = pred_I2[:1, ...]
         patch_2_res_d = patch_2_res[:1, ...]
