@@ -324,22 +324,21 @@ class ResNet(nn.Module):
                             mask_I1_full, patch_indices, batch_indices_tensor)
 
         pred_Mask = normMask(pred_Mask)
- 
-        mask_ap = torch.mul(mask_I2, pred_Mask)
 
+        mask_ap = torch.mul(mask_I2, pred_Mask)
+ 
         # step1 freeze the mask_ap use "mask_ap = torch.ones_like(mask_ap)" ,thus gradient do not update and mask=1
         # step2 delete this line ("mask_ap = torch.ones_like(mask_ap)")  to update gradient of genMask
         # ######
         # mask_ap = torch.ones_like(mask_ap)
         # ######
 
-        sum_value = torch.sum(mask_ap)
-        pred_I2_CnnFeature = self.ShareFeature(pred_I2)
-
-
         #######################################################################
         # Overwrite patch features - START
         #######################################################################
+
+        #sum_value = torch.sum(mask_ap)
+        #pred_I2_CnnFeature = self.ShareFeature(pred_I2)
 
         patch_1 = self.auxiliary_resnet(input_tesnors[:, :1, ...])
         patch_2 = self.auxiliary_resnet(input_tesnors[:, 1:, ...])
@@ -352,8 +351,12 @@ class ResNet(nn.Module):
         sum_value = torch.sum(mask_ap)
 
         # Cosine distance
-        l1 = 1 - torch.cosine_similarity(pred_I2_CnnFeature, patch_2, dim=1)
-        l3 = 1 - torch.cosine_similarity(patch_1, patch_2, dim=1)
+        #l1 = 1 - torch.cosine_similarity(pred_I2_CnnFeature, patch_2, dim=1)
+        #l3 = 1 - torch.cosine_similarity(patch_1, patch_2, dim=1)
+
+        # L1 distance
+        l1 = torch.sum(torch.abs(pred_I2_CnnFeature - patch_2), axis=1)
+        l3 = torch.sum(torch.abs(patch_1 - patch_2), axis=1)
 
         # Prepare mask
         mask_ap = torch.squeeze(mask_ap, dim=1)
