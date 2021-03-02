@@ -12,15 +12,15 @@ model_urls = {
 }
 
 
-def build_model(model_name, pretrained=False):
+def build_model(model_name, pretrained=False, fix_mask=False):
     if model_name == 'resnet34':
-        model = resnet.resnet34(pretrained=False)
+        model = resnet.resnet34(pretrained=False, fix_mask=fix_mask)
     elif model_name == 'resnet50':
-        model = resnet.resnet50(pretrained=False)
+        model = resnet.resnet50(pretrained=False, fix_mask=fix_mask)
     elif model_name == 'resnet101':
-        model = resnet.resnet101(pretrained=False)
+        model = resnet.resnet101(pretrained=False, fix_mask=fix_mask)
     elif model_name == 'resnet152':
-        model = resnet.resnet152(pretrained=False)
+        model = resnet.resnet152(pretrained=False, fix_mask=fix_mask)
 
     if model_name == 'resnet18':
         model.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3,

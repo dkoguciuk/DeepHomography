@@ -2,7 +2,9 @@
 import argparse
 import torch
 from torch.utils.data import DataLoader
+from torch.nn.parallel import DistributedDataParallel
 import numpy as np
+from numpy import random
 import os
 import torch.nn as nn
 import torch.optim as optim
@@ -12,6 +14,7 @@ from torch_homography_model import build_model
 from datetime import datetime
 from dataset import TrainDataset
 from utils import display_using_tensorboard
+from utils import synchronize, get_rank
 
 # name of log
 train_log_dir = 'train_log_Oneline-FastDLT'
@@ -29,7 +32,12 @@ MODEL_SAVE_DIR = os.path.join(exp_train_log_dir, 'real_models')
 
 now_time = datetime.now()
 
-writer = SummaryWriter(log_dir=LOG_DIR)
+save_to_disk = get_rank() == 0
+print('SAVE TO DISC:', save_to_disk)
+if save_to_disk:
+    writer = SummaryWriter(log_dir=LOG_DIR)
+else:
+    writer = None
 
 if not os.path.exists(MODEL_SAVE_DIR):
     os.makedirs(MODEL_SAVE_DIR)
@@ -40,7 +48,7 @@ if not os.path.exists(LOG_DIR):
 def train(args):
 
     train_path = os.path.join(exp_name, 'Data/Train_List.txt')
-    net = build_model(args.model_name, pretrained=args.pretrained)
+    net = build_model(args.model_name, pretrained=args.pretrained, fix_mask=args.fix_mask)
 
     if args.finetune:
         model_path = os.path.join(exp_name, 'models/freeze-mask-first-fintune.pth')
@@ -59,9 +67,18 @@ def train(args):
         model_dict.update(new_state_dict)
         net.load_state_dict(model_dict)
 
-    net = torch.nn.DataParallel(net)
-    if torch.cuda.is_available():
-        net = net.cuda()
+    if args.distributed:
+        torch.nn.SyncBatchNorm.convert_sync_batchnorm(net)
+        device = torch.device('cuda:{}'.format(args.local_rank))
+        net.to(device)
+        net = torch.nn.parallel.DistributedDataParallel(net, device_ids=[args.local_rank],
+                                                        output_device=args.local_rank, find_unused_parameters=True)
+    elif torch.cuda.is_available():
+        device = torch.device('cuda:0')
+        net = net.to(device)
+    else:
+        device = torch.device('cpu:0')
+        net = net.to(device)
 
     train_data = TrainDataset(data_path=train_path, exp_path=exp_name, patch_w=args.patch_size_w, patch_h=args.patch_size_h, rho=16)
     train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, num_workers=args.cpus, shuffle=True, drop_last=True)
@@ -87,13 +104,17 @@ def train(args):
             if (glob_iter % model_save_fre == 0 and glob_iter != 0 ):
                 filename = str(args.model_name)+'_iter_' + str(glob_iter) + '.pth'
                 model_save_path = os.path.join(MODEL_SAVE_DIR, filename)
-                torch.save(net, model_save_path)
+                if isinstance(net, DistributedDataParallel):
+                    net_to_save = net.module.state_dict()
+                else:
+                    net_to_save = net.state_dict()
+                torch.save(net_to_save, model_save_path)
 
                 for name, layer in net.named_parameters():
                     if layer.requires_grad == True:
-
-                        writer.add_histogram(name + '_grad', layer.grad.cpu().data.numpy(), glob_iter)
-                        writer.add_histogram(name + '_data', layer.cpu().data.numpy(), glob_iter)
+                        if writer:
+                            writer.add_histogram(name + '_grad', layer.grad.cpu().data.numpy(), glob_iter)
+                            writer.add_histogram(name + '_data', layer.cpu().data.numpy(), glob_iter)
 
             org_imges = batch_value[0].float()
             input_tesnors = batch_value[1].float()
@@ -109,13 +130,14 @@ def train(args):
             I2 = input_tesnors[:, 1, ...]
             I2 = I2[:, np.newaxis, ...]
 
-            if torch.cuda.is_available():
-                input_tesnors = input_tesnors.cuda()
-                patch_indices = patch_indices.cuda()
-                h4p = h4p.cuda()
-                I = I.cuda()
-                I2_ori_img = I2_ori_img.cuda()
-                I2 = I2.cuda()
+            # move to device
+            org_imges = org_imges.to(device)
+            input_tesnors = input_tesnors.to(device)
+            patch_indices = patch_indices.to(device)
+            h4p = h4p.to(device)
+            I = I.to(device)
+            I2_ori_img = I2_ori_img.to(device)
+            I2 = I2.to(device)
 
             # forward, backward, update weights
             optimizer.zero_grad()
@@ -149,11 +171,12 @@ def train(args):
             glob_iter += 1
 
             # using tensorbordX to check the input or output performance during training
-            if glob_iter % 200 == 0:
-                display_using_tensorboard(I, I2_ori_img, I2, pred_I2, I2_dataMat_CnnFeature, pred_I2_dataMat_CnnFeature,
-                                          triMask, loss_map, writer)
-            writer.add_scalars('Loss_group', {'feature_loss': loss_feature.item()}, glob_iter)
-            writer.add_scalar('learning rate', scheduler.get_lr()[0], glob_iter)
+            if writer:
+                if glob_iter % 200 == 0:
+                    display_using_tensorboard(I, I2_ori_img, I2, pred_I2, I2_dataMat_CnnFeature, pred_I2_dataMat_CnnFeature,
+                                              triMask, loss_map, writer)
+                writer.add_scalars('Loss_group', {'feature_loss': loss_feature.item()}, glob_iter)
+                writer.add_scalar('learning rate', scheduler.get_lr()[0], glob_iter)
 
     print('Finished Training')
 
@@ -174,12 +197,31 @@ if __name__=="__main__":
     parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
 
     parser.add_argument('--model_name', type=str, default='resnet34')
+    parser.add_argument('--fix_mask', type=bool, default=False, help='Should i fix mask?')
     parser.add_argument('--pretrained', type=bool, default=True, help='Use pretrained waights?')
     parser.add_argument('--finetune', type=bool, default=False, help='Use pretrained waights?')
+
+    # Distributed
+    parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument('--seed',default=0, type=int,
+                        help='Random seed for processes. Seed must be fixed for distributed training')
+
 
     print('<==================== Loading data ===================>\n')
 
     args = parser.parse_args()
+
+    args.distributed = args.gpus > 1
+    if args.distributed:
+        torch.manual_seed(args.seed)
+        random.seed(args.seed)
+
+        torch.cuda.set_device(args.local_rank)
+        torch.distributed.init_process_group(backend="nccl", init_method="env://", world_size=args.gpus,
+                                             rank=args.local_rank)
+        synchronize()
+
+
     print(args)
     train(args)
 

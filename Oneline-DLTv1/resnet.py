@@ -133,7 +133,7 @@ class Bottleneck(nn.Module):
 # define and forward ( Because of the load is unbalanced when use torch.nn.DataParallel, we define warp in forward)
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=1000):
+    def __init__(self, block, layers, num_classes=1000, fix_mask=False):
         self.inplanes = 64
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3,
@@ -147,6 +147,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
+        self.fix_mask = fix_mask
 
         self.ShareFeature = nn.Sequential(
             nn.Conv2d(1, 4, kernel_size=3, padding=1, bias=False),
@@ -277,7 +278,8 @@ class ResNet(nn.Module):
         # step1 freeze the mask_ap use "mask_ap = torch.ones_like(mask_ap)" ,thus gradient do not update and mask=1
         # step2 delete this line ("mask_ap = torch.ones_like(mask_ap)")  to update gradient of genMask
         # ######
-        # mask_ap = torch.ones_like(mask_ap)
+        if self.fix_mask:
+            mask_ap = torch.ones_like(mask_ap)
         # ######
 
         sum_value = torch.sum(mask_ap)
