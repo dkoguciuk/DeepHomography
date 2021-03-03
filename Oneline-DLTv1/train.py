@@ -176,7 +176,8 @@ def train(args):
                     display_using_tensorboard(I, I2_ori_img, I2, pred_I2, I2_dataMat_CnnFeature, pred_I2_dataMat_CnnFeature,
                                               triMask, loss_map, writer)
                 writer.add_scalars('Loss_group', {'feature_loss': loss_feature.item()}, glob_iter)
-                writer.add_scalar('learning rate', scheduler.get_lr()[0], glob_iter)
+                writer.add_scalar('learning rate', {'value': scheduler.get_last_lr()[0]}, glob_iter)
+                writer.flush()
 
     print('Finished Training')
 
