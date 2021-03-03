@@ -32,14 +32,23 @@ MODEL_SAVE_DIR = os.path.join(exp_train_log_dir, 'real_models')
 
 now_time = datetime.now()
 
+###############################################################################
+# Create summary writer and file structure
+###############################################################################
 save_to_disk = get_rank() == 0
 print('SAVE TO DISC:', save_to_disk)
 if save_to_disk:
     writer = SummaryWriter(log_dir=LOG_DIR)
     if not os.path.exists(MODEL_SAVE_DIR):
-        os.makedirs(MODEL_SAVE_DIR)
+        try:
+            os.makedirs(MODEL_SAVE_DIR)
+        except OSError as e:
+            print(e.args)
     if not os.path.exists(LOG_DIR):
-        os.makedirs(LOG_DIR)
+        try:
+            os.makedirs(LOG_DIR)
+        except OSError as e:
+            print(e.args)
 else:
     writer = None
 
@@ -174,9 +183,9 @@ def train(args):
                 if glob_iter % 200 == 0:
                     display_using_tensorboard(I, I2_ori_img, I2, pred_I2, I2_dataMat_CnnFeature, pred_I2_dataMat_CnnFeature,
                                               triMask, loss_map, writer)
-                writer.add_scalars('Loss_group', {'feature_loss': loss_feature.item()}, glob_iter)
-                writer.add_scalars('learning rate', {'value': scheduler.get_last_lr()[0]}, glob_iter)
-                writer.flush()
+                    writer.add_scalars('Loss_group', {'feature_loss': loss_feature.item()}, glob_iter)
+                    writer.add_scalars('learning rate', {'value': scheduler.get_last_lr()[0]}, glob_iter)
+                    writer.flush()
 
     print('Finished Training')
 
