@@ -36,13 +36,12 @@ save_to_disk = get_rank() == 0
 print('SAVE TO DISC:', save_to_disk)
 if save_to_disk:
     writer = SummaryWriter(log_dir=LOG_DIR)
+    if not os.path.exists(MODEL_SAVE_DIR):
+        os.makedirs(MODEL_SAVE_DIR)
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
 else:
     writer = None
-
-if not os.path.exists(MODEL_SAVE_DIR):
-    os.makedirs(MODEL_SAVE_DIR)
-if not os.path.exists(LOG_DIR):
-    os.makedirs(LOG_DIR)
 
 
 def train(args):
