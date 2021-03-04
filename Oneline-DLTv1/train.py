@@ -88,13 +88,20 @@ def train(args):
         device = torch.device('cpu:0')
         net = net.to(device)
 
-    train_data = TrainDataset(data_path=train_path, exp_path=exp_name, patch_w=args.patch_size_w, patch_h=args.patch_size_h, rho=16)
-    train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, num_workers=args.cpus, shuffle=True, drop_last=True)
-
+    train_data = TrainDataset(data_path=train_path, exp_path=exp_name, patch_w=args.patch_size_w,
+                              patch_h=args.patch_size_h, rho=16)
+    if args.distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_data, num_replicas=args.gpus,
+                                                                        rank=args.local_rank)
+    else:
+        train_sampler = torch.utils.data.RandomSampler(train_data)
+    train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, num_workers=args.cpus, shuffle=False,
+                              drop_last=True, sampler=train_sampler)
     optimizer = optim.Adam(net.parameters(), lr=args.lr, amsgrad=True, weight_decay=1e-4)  # default as 0.0001
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.8)
 
-    print("start training")
+    print("######################start training######################")
+    print('LEN TRAIN_LOADER: ', len(train_loader))
 
     score_print_fre = 200
     model_save_fre = 4000
@@ -193,7 +200,7 @@ def train(args):
 if __name__=="__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gpus', type=int, default=2, help='Number of splits')
+    parser.add_argument('--gpus', type=int, default=2, help='Number of gpus')
     parser.add_argument('--cpus', type=int, default=8, help='Number of cpus')
 
     parser.add_argument('--img_w', type=int, default=640)
