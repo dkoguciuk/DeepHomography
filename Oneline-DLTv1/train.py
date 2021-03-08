@@ -15,6 +15,7 @@ from datetime import datetime
 from dataset import TrainDataset
 from utils import display_using_tensorboard
 from utils import synchronize, get_rank
+from dist_utils.checkpoint import CheckPointer
 
 # name of log
 train_log_dir = 'train_log_Oneline-FastDLT'
@@ -58,23 +59,6 @@ def train(args):
     train_path = os.path.join(exp_name, 'Data/Train_List.txt')
     net = build_model(args.model_name, pretrained=args.pretrained, fix_mask=args.fix_mask)
 
-    if args.finetune:
-        model_path = os.path.join(exp_name, 'models/freeze-mask-first-fintune.pth')
-        print(model_path)
-        state_dict = torch.load(model_path, map_location='cpu')
-        # create new OrderedDict that does not contain `module.`
-        from collections import OrderedDict
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.state_dict().items():
-            name_key = k[7:]  # remove `module.`
-            new_state_dict[name_key] = v
-        # load params
-        net = build_model(args.model_name)
-        model_dict = net.state_dict()
-        new_state_dict = {k: v for k, v in new_state_dict.items() if k in model_dict.keys()}
-        model_dict.update(new_state_dict)
-        net.load_state_dict(model_dict)
-
     if args.distributed:
         torch.nn.SyncBatchNorm.convert_sync_batchnorm(net)
         device = torch.device('cuda:{}'.format(args.local_rank))
@@ -100,6 +84,21 @@ def train(args):
     optimizer = optim.Adam(net.parameters(), lr=args.lr, amsgrad=True, weight_decay=1e-4)  # default as 0.0001
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.8)
 
+    ###########################################################################
+    # Checkpoint load
+    ###########################################################################
+
+    checkpoint_arguments = {"step": 0}
+    checkpointer = CheckPointer(net, optimizer, scheduler, train_log_dir, True, None, device=args.local_rank)
+    extra_checkpoint_data = checkpointer.load()
+    checkpoint_arguments.update(extra_checkpoint_data)
+    if checkpoint_arguments['step'] != 0:
+        print('Checkpoint loaded with step: ', checkpoint_arguments['step'])
+
+    ###########################################################################
+    # Start training
+    ###########################################################################
+
     print("######################start training######################")
     print('LEN TRAIN_LOADER: ', len(train_loader))
 
@@ -117,13 +116,10 @@ def train(args):
         for i, batch_value in enumerate(train_loader):
             # save model
             if (glob_iter % model_save_fre == 0 and glob_iter != 0 ):
-                filename = str(args.model_name)+'_iter_' + str(glob_iter) + '.pth'
-                model_save_path = os.path.join(MODEL_SAVE_DIR, filename)
-                if isinstance(net, DistributedDataParallel):
-                    net_to_save = net.module.state_dict()
-                else:
-                    net_to_save = net.state_dict()
-                torch.save(net_to_save, model_save_path)
+
+                # Save state
+                checkpoint_arguments['step'] = glob_iter
+                checkpointer.save("model_{:06d}".format(glob_iter), **checkpoint_arguments)
 
                 for name, layer in net.named_parameters():
                     if layer.requires_grad == True:
@@ -215,7 +211,6 @@ if __name__=="__main__":
     parser.add_argument('--model_name', type=str, default='resnet34')
     parser.add_argument('--fix_mask', type=bool, default=False, help='Should i fix mask?')
     parser.add_argument('--pretrained', type=bool, default=True, help='Use pretrained waights?')
-    parser.add_argument('--finetune', type=bool, default=False, help='Use pretrained waights?')
 
     # Distributed
     parser.add_argument("--local_rank", type=int, default=0)
