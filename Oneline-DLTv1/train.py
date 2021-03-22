@@ -89,7 +89,7 @@ def train(args):
     ###########################################################################
 
     checkpoint_arguments = {"step": 0}
-    checkpointer = CheckPointer(net, optimizer, scheduler, MODEL_SAVE_DIR, True, None, device=args.local_rank)
+    checkpointer = CheckPointer(net, optimizer, scheduler, MODEL_SAVE_DIR, True, None, device='cuda')
     extra_checkpoint_data = checkpointer.load()
     checkpoint_arguments.update(extra_checkpoint_data)
     if checkpoint_arguments['step'] != 0:
