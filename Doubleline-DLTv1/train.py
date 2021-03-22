@@ -119,18 +119,6 @@ def train(args):
         scheduler.step()  # Note: The initial learning rate should be 1e-4. torch_version==1.0.1 ->init lr == 0.0001; torch_version>=1.2.0 ->init lr == 0.0001*1.25?
         print(epoch, 'lr={:.6f}'.format(scheduler.get_lr()[0]))
         for i, batch_value in enumerate(train_loader):
-            # save model
-            if (glob_iter % model_save_fre == 0 and glob_iter != 0 ):
-
-                # Save state
-                checkpoint_arguments['step'] = glob_iter
-                checkpointer.save("model_{:06d}".format(glob_iter), **checkpoint_arguments)
-
-                for name, layer in net.named_parameters():
-                    if layer.requires_grad == True:
-                        if writer:
-                            writer.add_histogram(name + '_grad', layer.grad.cpu().data.numpy(), glob_iter)
-                            writer.add_histogram(name + '_data', layer.cpu().data.numpy(), glob_iter)
 
             org_imges = batch_value[0].float()
             input_tesnors = batch_value[1].float()
@@ -186,8 +174,6 @@ def train(args):
                                                                                                        i + 1, len(train_loader), loss_avg_feature,
                                                                                                        scheduler.get_lr()[0]))
 
-            glob_iter += 1
-
             # using tensorbordX to check the input or output performance during training
             if writer:
                 if glob_iter % 200 == 0:
@@ -199,8 +185,24 @@ def train(args):
                     writer.add_scalars('learning rate', {'value': scheduler.get_last_lr()[0]}, glob_iter)
                     writer.flush()
 
+            # save model
+            if (glob_iter % model_save_fre == 0 and glob_iter != start_epoch * len(train_loader) ):
+
+                # Save state
+                checkpoint_arguments['step'] = glob_iter
+                checkpointer.save("model_{:06d}".format(glob_iter), **checkpoint_arguments)
+
+                for name, layer in net.named_parameters():
+                    if layer.requires_grad == True:
+                        if writer:
+                            writer.add_histogram(name + '_grad', layer.grad.cpu().data.numpy(), glob_iter)
+                            writer.add_histogram(name + '_data', layer.cpu().data.numpy(), glob_iter)
+
+            # Another glob iter
+            glob_iter += 1
+
     # Save state
-    checkpoint_arguments['step'] = glob_iter
+    checkpoint_arguments['step'] = glob_iter - 1
     checkpointer.save("model_{:06d}".format(glob_iter), **checkpoint_arguments)
     print('Finished Training')
 
