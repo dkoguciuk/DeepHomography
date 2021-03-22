@@ -172,8 +172,6 @@ def train(args):
                                                                                                        i + 1, len(train_loader), loss_avg_feature,
                                                                                                        scheduler.get_lr()[0]))
 
-            glob_iter += 1
-
             # using tensorbordX to check the input or output performance during training
             if writer:
                 if glob_iter % 200 == 0:
@@ -196,8 +194,11 @@ def train(args):
                             writer.add_histogram(name + '_grad', layer.grad.cpu().data.numpy(), glob_iter)
                             writer.add_histogram(name + '_data', layer.cpu().data.numpy(), glob_iter)
 
+            # Another glob iter
+            glob_iter += 1
+
     # Save state
-    checkpoint_arguments['step'] = glob_iter
+    checkpoint_arguments['step'] = glob_iter - 1
     checkpointer.save("model_{:06d}".format(glob_iter), **checkpoint_arguments)
     print('Finished Training')
 
