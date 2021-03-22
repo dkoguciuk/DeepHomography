@@ -120,7 +120,7 @@ def train(args):
         print(epoch, 'lr={:.6f}'.format(scheduler.get_lr()[0]))
         for i, batch_value in enumerate(train_loader):
             # save model
-            if (glob_iter % model_save_fre == 0 and glob_iter != 0 ):
+            if (glob_iter % model_save_fre == 0 and glob_iter != start_epoch * len(train_loader) ):
 
                 # Save state
                 checkpoint_arguments['step'] = glob_iter
