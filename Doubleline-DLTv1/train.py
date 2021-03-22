@@ -105,8 +105,13 @@ def train(args):
     score_print_fre = 200
     model_save_fre = 4000
     glob_iter = 0
+    start_epoch = 0
+    if checkpoint_arguments['step'] != 0:
+        glob_iter = checkpoint_arguments['step']
+        start_epoch = int(np.rint(glob_iter / len(train_loader)))
+        print('Global iter: {} start epoch: {}: ', glob_iter, start_epoch)
 
-    for epoch in range(args.max_epoch):
+    for epoch in range(start_epoch, args.max_epoch):
         net.train()
         loss_sigma = 0.0
         loss_sigma_feature = 0.0
@@ -194,6 +199,9 @@ def train(args):
                     writer.add_scalars('learning rate', {'value': scheduler.get_last_lr()[0]}, glob_iter)
                     writer.flush()
 
+    # Save state
+    checkpoint_arguments['step'] = glob_iter
+    checkpointer.save("model_{:06d}".format(glob_iter), **checkpoint_arguments)
     print('Finished Training')
 
 
