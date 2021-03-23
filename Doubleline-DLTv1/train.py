@@ -33,28 +33,8 @@ MODEL_SAVE_DIR = os.path.join(exp_train_log_dir, 'real_models')
 
 now_time = datetime.now()
 
-###############################################################################
-# Create summary writer and file structure
-###############################################################################
-save_to_disk = get_rank() == 0
-print('SAVE TO DISC:', save_to_disk)
-if save_to_disk:
-    writer = SummaryWriter(log_dir=LOG_DIR)
-    if not os.path.exists(MODEL_SAVE_DIR):
-        try:
-            os.makedirs(MODEL_SAVE_DIR)
-        except OSError as e:
-            print(e.args)
-    if not os.path.exists(LOG_DIR):
-        try:
-            os.makedirs(LOG_DIR)
-        except OSError as e:
-            print(e.args)
-else:
-    writer = None
 
-
-def train(args):
+def train(args, writer):
 
     train_path = os.path.join(exp_name, 'Data/Train_List.txt')
     net = build_model(args.model_name, pretrained=args.pretrained, fix_mask=args.fix_mask)
@@ -245,8 +225,28 @@ if __name__=="__main__":
                                              rank=args.local_rank)
         synchronize()
 
+    ###############################################################################
+    # Create summary writer and file structure
+    ###############################################################################
+
+    save_to_disk = get_rank() == 0
+    print('SAVE TO DISC:', save_to_disk)
+    if save_to_disk:
+        writer = SummaryWriter(log_dir=LOG_DIR)
+        if not os.path.exists(MODEL_SAVE_DIR):
+            try:
+                os.makedirs(MODEL_SAVE_DIR)
+            except OSError as e:
+                print(e.args)
+        if not os.path.exists(LOG_DIR):
+            try:
+                os.makedirs(LOG_DIR)
+            except OSError as e:
+                print(e.args)
+    else:
+        writer = None
 
     print(args)
-    train(args)
+    train(args, writer)
 
 
