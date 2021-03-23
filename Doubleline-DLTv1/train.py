@@ -230,11 +230,10 @@ if __name__=="__main__":
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument('--seed',default=0, type=int,
                         help='Random seed for processes. Seed must be fixed for distributed training')
-
+    args = parser.parse_args()
 
     print('<==================== Loading data ===================>\n')
-
-    args = parser.parse_args()
+    print('LOCAL RANK: {}'.format(args.local_rank))
 
     args.distributed = args.gpus > 1
     if args.distributed:
